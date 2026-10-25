@@ -519,6 +519,9 @@
       },
       "fresh_air_exhaust": {
         "name": "排风"
+      },
+      "fan": {
+        "name": "风扇"
       }
     },
     "lock": {

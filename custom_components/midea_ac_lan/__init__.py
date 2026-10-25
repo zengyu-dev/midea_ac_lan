@@ -50,6 +50,7 @@ from .const import (
     supports_device,
 )
 from .midea_devices import MIDEA_DEVICES
+from . import x13_fan_light  # noqa: F401  # apply X13 fan-light runtime patches
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -136,6 +136,13 @@ MIDEA_DEVICES: dict[int, dict[str, dict[str, Any] | str]] = {
                 "icon": "mdi:lightbulb",
                 "default": True,
             },
+            "fan": {
+                "type": Platform.FAN,
+                "has_entity_name": True,
+                "translation_key": "fan",
+                "icon": "mdi:fan",
+                "default": True,
+            },
         },
     },
     0x26: {

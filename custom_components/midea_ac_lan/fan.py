@@ -19,6 +19,7 @@ from midealan.devices.b6 import MideaB6Device
 from midealan.devices.ce import DeviceAttributes as CEAttributes
 from midealan.devices.ce import MideaCEDevice
 from midealan.devices.fa import MideaFADevice
+from midealan.devices.x13 import Midea13Device
 from midealan.devices.x40 import DeviceAttributes as X40Attributes
 from midealan.devices.x40 import MideaX40Device
 
@@ -31,6 +32,12 @@ from .midea_devices import (
     MIDEA_DEVICES,
 )
 from .midea_entity import MideaEntity
+from .x13_fan_light import (
+    ATTR_FAN_POWER,
+    ATTR_FAN_SPEED,
+    DEFAULT_X13_FAN_SPEED,
+    FAN_SPEED_VALUES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,7 +52,12 @@ async def async_setup_entry(
     device = hass.data[DOMAIN][DEVICES].get(device_id)
     extra_switches = config_entry.options.get(CONF_SWITCHES, [])
     devs: list[
-        MideaFAFan | MideaB6Fan | MideaACFreshAirFan | MideaCEFan | MideaX40Fan
+        MideaFAFan
+        | MideaB6Fan
+        | MideaACFreshAirFan
+        | MideaCEFan
+        | MideaX40Fan
+        | MideaX13Fan
     ] = []
     for entity_key, config in cast(
         "dict",
@@ -70,6 +82,8 @@ async def async_setup_entry(
                 devs.append(MideaCEFan(device, entity_key))
             elif device.device_type == DeviceType.X40:
                 devs.append(MideaX40Fan(device, entity_key))
+            elif device.device_type == DeviceType.X13:
+                devs.append(MideaX13Fan(device, entity_key))
     async_add_entities(devs)
 
 
@@ -379,3 +393,67 @@ class MideaX40Fan(MideaFan):
     def turn_off(self, **kwargs: Any) -> None:  # ruff:ignore[any-type, unused-method-argument]
         """Midea X40 Fan turn off."""
         self._device.set_attribute(attr=X40Attributes.fan_speed, value=0)
+
+
+class MideaX13Fan(MideaFan):
+    """Midea X13 fan-light fan entry.
+
+    The register-level protocol lives in ``x13_fan_light``; the device
+    reports the fan speed as a plain percentage (1..100) quantised to six
+    gears, so ``set_percentage`` snaps onto the nearest gear value.
+    """
+
+    _device: Midea13Device
+
+    def __init__(self, device: Midea13Device, entity_key: str) -> None:
+        """Midea X13 Fan entity init."""
+        super().__init__(device, entity_key)
+        self._attr_supported_features = (
+            FanEntityFeature.SET_SPEED | FAN_FEATURE_TURN_ON_OFF
+        )
+        self._attr_speed_count = 100
+
+    @property
+    def is_on(self) -> bool:
+        """Midea X13 Fan is on."""
+        return bool(self._device.get_attribute(ATTR_FAN_POWER))
+
+    @property
+    def percentage(self) -> int | None:
+        """Midea X13 Fan percentage (the device reports 1..100 directly)."""
+        speed = self._device.get_attribute(ATTR_FAN_SPEED)
+        if not speed:
+            return None
+        return min(100, max(1, int(speed)))
+
+    def turn_on(
+        self,
+        percentage: int | None = None,
+        preset_mode: str | None = None,  # ruff:ignore[unused-method-argument]
+        **kwargs: Any,  # ruff:ignore[any-type, unused-method-argument]
+    ) -> None:
+        """Midea X13 Fan turn on.
+
+        Setting a speed value also powers the fan on, so a plain turn-on
+        re-uses the device's remembered speed.
+        """
+        if percentage is not None:
+            self.set_percentage(percentage)
+            return
+        speed = int(self._device.get_attribute(ATTR_FAN_SPEED) or 0)
+        self._device.set_attribute(
+            attr=ATTR_FAN_SPEED,
+            value=speed or DEFAULT_X13_FAN_SPEED,
+        )
+
+    def turn_off(self, **kwargs: Any) -> None:  # ruff:ignore[any-type, unused-method-argument]
+        """Midea X13 Fan turn off."""
+        self._device.set_attribute(attr=ATTR_FAN_POWER, value=False)
+
+    def set_percentage(self, percentage: int) -> None:
+        """Snap the requested percentage onto the nearest physical gear."""
+        if percentage <= 0:
+            self.turn_off()
+            return
+        speed = min(FAN_SPEED_VALUES, key=lambda value: abs(value - percentage))
+        self._device.set_attribute(attr=ATTR_FAN_SPEED, value=speed)
