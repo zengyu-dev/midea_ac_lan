@@ -133,6 +133,8 @@ MIDEA_DEVICES: dict[int, dict[str, dict[str, Any] | str]] = {
         "entities": {
             "light": {
                 "type": Platform.LIGHT,
+                "has_entity_name": True,
+                "translation_key": "light",
                 "icon": "mdi:lightbulb",
                 "default": True,
             },
